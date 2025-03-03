@@ -1,0 +1,21 @@
+{
+  "name": "ip-logger-rate-limiter",
+  "version": "1.0.7",
+  "description": "An Optimal and Superfast IP logger and rate limiter middleware for Express",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "keywords": [
+    "ip",
+    "logger",
+    "rate-limiter",
+    "middleware",
+    "express"
+  ],
+  "author": "Ronie-Coder",
+  "license": "MIT"
+}
