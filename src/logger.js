@@ -1,24 +1,38 @@
+const redis = require("redis");
 const fs = require("fs");
 const path = require("path");
 
-// Allow a custom path or default to the current directory
-const iplogger_to_TXT = (userIp, url, logFilePath = path.join(process.cwd(), "iplogger.txt")) => {
-  // Ensure the directory exists before writing to the file
-  const dir = path.dirname(logFilePath);
-  
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+const client = redis.createClient();
+client.connect(); // Ensure Redis is connected
 
-  // Append the IP and URL to the log file
-  fs.appendFile(
-    logFilePath,
-    `${new Date().toISOString()} - ${userIp} - ${url}\n`,
-    (err) => {
-      if (err) throw err;
-      console.log(`IP address logged: ${userIp}`);
-    }
-  );
+const logKey = "ip_logs";
+const logFilePath = path.join(process.cwd(), "iplogger.txt");
+
+// Log IP to Redis
+const iplogger_to_TXT = async (userIp, url) => {
+  try {
+    const logEntry = `${new Date().toISOString()} - ${userIp} - ${url}`;
+    await client.rPush(logKey, logEntry); // Push log to Redis list
+    console.log(`IP logged: ${logEntry}`);
+  } catch (error) {
+    console.error("Redis Logging Error:", error);
+  }
 };
+
+// Periodically flush logs from Redis to file
+const flushLogsToFile = async () => {
+  try {
+    const logs = await client.lRange(logKey, 0, -1);
+    if (logs.length > 0) {
+      fs.appendFileSync(logFilePath, logs.join("\n") + "\n");
+      await client.del(logKey); // Clear Redis logs after writing
+    }
+  } catch (error) {
+    console.error("Error flushing logs:", error);
+  }
+};
+
+// Flush logs every minute
+setInterval(flushLogsToFile, 60 * 1000);
 
 module.exports = iplogger_to_TXT;
