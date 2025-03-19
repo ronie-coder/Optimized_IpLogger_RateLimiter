@@ -1,33 +1,32 @@
-const requestLog = [];
+const redis = require("redis");
+const client = redis.createClient();
+const windowMs = 10 * 1000; // 10 seconds
+const maxRequests = 5; // Limit requests per IP
 
-const customRateLimiter = (req, res, next) => {
-  const userIp = req.ip;
-  const currentTime = Date.now();
-  const windowMs = 10 * 1000; // 10 seconds
+client.connect(); // Ensure Redis is connected
 
-  // Remove expired requests before checking to prevent memory leaks
-  requestLog.forEach((entry, index) => {
-    if (currentTime - entry.timeStamp >= windowMs) {
-      requestLog.splice(index, 1);
+const customRateLimiter = async (req, res, next) => {
+  try {
+    const userIp = req.ip;
+
+    // Check request count in Redis
+    const requestCount = await client.get(userIp);
+
+    if (requestCount && requestCount >= maxRequests) {
+      return res.status(429).send("Too many requests");
     }
-  });
 
-  for (let i = 0; i < requestLog.length; i++) {
-    if (requestLog[i].ip === userIp && requestLog[i].url === req.url) {
-      if (currentTime - requestLog[i].timeStamp < windowMs) {
-        return res.status(429).send("Too many requests");
-      } else {
-        // Remove the old entry and allow the new request
-        requestLog.splice(i, 1);
-        break;
-      }
-    }
+    // Increment request count with expiry time
+    await client.multi()
+      .incr(userIp) // Increment request count
+      .expire(userIp, windowMs / 1000) // Set expiry in seconds
+      .exec();
+
+    next();
+  } catch (error) {
+    console.error("Redis Rate Limiter Error:", error);
+    res.status(500).send("Internal Server Error");
   }
-
-  // Add new request to log
-  requestLog.push({ ip: userIp, timeStamp: currentTime, url: req.url });
-
-  next();
 };
 
 module.exports = customRateLimiter;
